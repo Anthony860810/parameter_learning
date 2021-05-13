@@ -15,11 +15,11 @@ import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.dataset import TensorDataset
 
-PERTUBTIME = 2
+PERTUBTIME = 3
 A_data_len = [67 ,100 ,100 ,100]
 batch_size = 10
 lr = 0.001
-epochs = 250
+epochs = 500
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 class CreatDataset(Dataset):
@@ -40,23 +40,23 @@ class Net(nn.Module):
             nn.Linear(10,40),
             nn.Tanh(),
             nn.Linear(40,40),
-            nn.ReLU(),
+            nn.Tanh(),
             nn.Linear(40,40),
-            nn.ReLU(),
+            nn.Tanh(),
             nn.Linear(40,40),
-            nn.ReLU(),
+            nn.Tanh(),
             nn.Linear(40,40),
-            nn.ReLU(),
+            nn.Tanh(),
             nn.Linear(40,40),
-            nn.ReLU(),
+            nn.Tanh(),
             nn.Linear(40,40),
-            nn.ReLU(),
+            nn.Tanh(),
             nn.Linear(40,40),
-            nn.ReLU(),
+            nn.Tanh(),
             nn.Linear(40,40),
-            nn.ReLU(),
+            nn.Tanh(),
             nn.Linear(40,40),
-            nn.ReLU(),
+            
             nn.Linear(40, 1)
         )
     def forward(self, x):
@@ -129,11 +129,12 @@ def Split(x,y):
 
 if __name__ == '__main__':
     data = DataGenerate()
+    x = data[:,:-2]
     y = data[:,-2]
+    print(y.shape)
     ## 後三個都是evaluation後三個都是evaluation
-    x= data[:-3]
     #print(data[:,-4])
-    x = SelectFeatures(data)
+    x = SelectFeatures(x)
     X_train, X_test, y_train, y_test =Split(x,y)
     
     torch_train_dataset = CreatDataset(X_train, y_train)
