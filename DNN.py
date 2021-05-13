@@ -56,7 +56,7 @@ class Net(nn.Module):
             nn.Linear(40,40),
             nn.Tanh(),
             nn.Linear(40,40),
-            
+            nn.Tanh(),
             nn.Linear(40, 1)
         )
     def forward(self, x):
@@ -135,6 +135,7 @@ if __name__ == '__main__':
     ## 後三個都是evaluation後三個都是evaluation
     #print(data[:,-4])
     x = SelectFeatures(x)
+    
     X_train, X_test, y_train, y_test =Split(x,y)
     
     torch_train_dataset = CreatDataset(X_train, y_train)
