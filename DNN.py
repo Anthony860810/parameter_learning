@@ -63,8 +63,9 @@ class Net(nn.Module):
         out = self.layers(x)
         return out
 
-
-def DataGenerate():
+if __name__ == '__main__':
+    PERTUBTIME = 3
+    A_data_len = [67 ,100 ,100 ,100]
     feat_data = pd.read_csv("TSfeatA1Benchmark.csv",index_col = 0)
     lab_data = pd.read_csv("A1_Label.csv",index_col = 0)
     feat_data = feat_data.values
@@ -117,34 +118,36 @@ def DataGenerate():
             training_data = np.append(training_data,buffer)
     #[:,-1] ==> label of Xt (for classify),[:,-2] ==> label of threshold (for regression)
     training_data = np.reshape(training_data,(-1,feat_data_reglab.shape[1]+1))
-    #print(training_data,training_data.shape)
-    return training_data
-def SelectFeatures(dataset):
-    pca = PCA(n_components=10)
-    newdata = pca.fit_transform(dataset)
-    return newdata
 
-def Split(x,y):
-    return  train_test_split(x, y, test_size=0.1, random_state=0, shuffle=True)
+    #==============
+    #start training ---> PCA+DNN
+    PCA_COMPONENTS = 10
 
-if __name__ == '__main__':
-    data = DataGenerate()
-    x = data[:,:-2]
-    y = data[:,-2]
-    print(y.shape)
-    ## 後三個都是evaluation後三個都是evaluation
-    #print(data[:,-4])
-    x = SelectFeatures(x)
-    
-    X_train, X_test, y_train, y_test =Split(x,y)
-    
-    torch_train_dataset = CreatDataset(X_train, y_train)
-    torch_test_dataset = CreatDataset(X_test, y_test)
+    pca = PCA(n_components=PCA_COMPONENTS)
+    pca.fit(training_data[:,:-2])
+    training_data_pca = pca.transform(training_data[:,:-2])
+    stick_reglab = np.reshape(training_data[:,-2],(-1,1))
+    training_data_pca = np.append(training_data_pca,stick_reglab,axis = 1)
+    scaler_DNN = MinMaxScaler(feature_range=(-1, 1))
+    training_data_pca = scaler_DNN.fit_transform(training_data_pca,(-1,1))
+
+    #split in to the train and test set
+    row = round(0.9 * training_data_pca.shape[0])
+    np.random.shuffle(training_data_pca)
+    train = training_data_pca[:int(row), :]
+    x_train = train[:, :-1]
+    y_train = train[:, -1]
+    x_test = training_data_pca[int(row):, :-1]
+    y_test = training_data_pca[int(row):, -1]
+
+    print(x_train.shape)
+    print(x_test.shape)
+    torch_train_dataset = CreatDataset(x_train, y_train)
+    torch_test_dataset = CreatDataset(x_test, y_test)
     loader_train = DataLoader(
             dataset=torch_train_dataset,
             batch_size=batch_size,
-            num_workers=4,
-            shuffle=True)
+            num_workers=4)
     loader_test = DataLoader(
             dataset=torch_test_dataset,
             batch_size=batch_size,
@@ -152,19 +155,21 @@ if __name__ == '__main__':
     )
 
     model = Net()
-    model.to(device, dtype=torch.double)
-    loss_func = nn.L1Loss()
+    model.to(dtype=float)
+    loss_func = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     ## Train
     loss_list=[]
     best_model = model
     best_score = sys.maxsize
     print(best_score)
+
     for epoch in tqdm(range(epochs)):
         model.train()
         running_loss=0.0
         for batch_idx, (data, target) in enumerate(loader_train):
-            data, target = data.to(device), target.to(device)
+            optimizer.zero_grad()
+            #data, target = data.to(device), target.to(device)
             #data = data.view(-1 , 10)
             y_hat = model(data)
             target = target.to(dtype=float)
@@ -172,7 +177,7 @@ if __name__ == '__main__':
             running_loss+=loss.item()
             loss.backward()
             optimizer.step()
-            optimizer.zero_grad()
+            
         if running_loss < best_score:
             best_score = running_loss
             best_model = model
@@ -182,33 +187,24 @@ if __name__ == '__main__':
         ##loss_list.append(running_loss)
 
 
-    y_pred = []
-    real = []
+    y = []
+    y_hat = []
     mse=0
     mae=0
-    for batch_idx, (data, target) in tqdm(enumerate(loader_test)):
-            data, target = data.to(device), target.to(device)
-            print(target)
+    with torch.no_grad():
+        for batch_idx, (data, target) in tqdm(enumerate(loader_test)):
+            #data, target = data, target
             #data = data.view(-1 , 10)
-            y_hat=best_model(data)
-            mse += nn.MSELoss()(target, y_hat)
-            mae += nn.L1Loss()(target, y_hat)
-            y_pred.append(y_hat.cpu().detach().numpy().flatten())
-            real.append(target.cpu().detach().numpy().flatten())
-    print("MSE: "+str(mse.item()))
-    print("MAE: "+str(mae.item()))
+            y_pred=best_model(data)
+            mse += nn.MSELoss()(target, y_pred.flatten())
+            mae += nn.L1Loss()(target, y_pred.flatten())
+            for i in range(len(y_pred)):
+                y_hat.append(y_pred[i])
+                y.append(target[i])
+        print("MSE: "+str(mse.item()))
+        print("MAE: "+str(mae.item()))
     
-    y_pred = np.array(y_pred)
-    y_pred.flatten()
-    real = np.array(real)
-    real.flatten()
-    y=[]
-    y_hat=[]
-    for i in range(len(y_pred)):
-        print(y_pred[i])
-        for j in range(len(y_pred[i])):
-            y.append(real[i][j])
-            y_hat.append(y_pred[i][j])
+
     
     plt.plot(y, color="blue", label ="target")
     plt.plot(y_hat, color="red", label="predict")
